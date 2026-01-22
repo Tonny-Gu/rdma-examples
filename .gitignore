@@ -1,0 +1,12 @@
+# Build artifacts
+server
+client
+*.o
+
+# Editor files
+*~
+*.swp
+.vscode/
+
+# Temporary files
+.tmp/
