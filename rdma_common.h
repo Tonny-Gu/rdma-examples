@@ -113,4 +113,34 @@ static inline int rdma_write(struct ibv_qp *qp, struct ibv_mr *mr, void *buf,
     return ibv_post_send(qp, &wr, &bad);
 }
 
+/*
+ * Poll CQ and verify completion status and opcode.
+ * Returns 0 on success, -1 on error (error printed to stderr).
+ */
+static inline int poll_cq_verify(struct ibv_cq *cq, struct ibv_wc *wc,
+                                  enum ibv_wc_opcode expected) {
+    int ret;
+    while ((ret = ibv_poll_cq(cq, 1, wc)) == 0)
+        ;
+
+    if (ret < 0) {
+        fprintf(stderr, "ibv_poll_cq failed: %d\n", ret);
+        return -1;
+    }
+
+    if (wc->status != IBV_WC_SUCCESS) {
+        fprintf(stderr, "CQ error: %s (%d)\n",
+                ibv_wc_status_str(wc->status), wc->status);
+        return -1;
+    }
+
+    if (wc->opcode != expected) {
+        fprintf(stderr, "CQ opcode mismatch: expected %d, got %d\n",
+                expected, wc->opcode);
+        return -1;
+    }
+
+    return 0;
+}
+
 #endif /* RDMA_COMMON_H */

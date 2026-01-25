@@ -151,17 +151,11 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        while (ibv_poll_cq(cq, 1, &wc) == 0);
-        if (wc.status != IBV_WC_SUCCESS) {
-            fprintf(stderr, "Send error: %d\n", wc.status);
+        if (poll_cq_verify(cq, &wc, IBV_WC_RDMA_WRITE) != 0)
             break;
-        }
 
-        while (ibv_poll_cq(cq, 1, &wc) == 0);
-        if (wc.status != IBV_WC_SUCCESS) {
-            fprintf(stderr, "Recv error: %d\n", wc.status);
+        if (poll_cq_verify(cq, &wc, IBV_WC_RECV_RDMA_WITH_IMM) != 0)
             break;
-        }
 
         double t_end = get_time_us();
         printf("seq=%u time=%.2f us\n", seq, t_end - t_start);
