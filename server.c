@@ -147,11 +147,8 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        while (ibv_poll_cq(cq, 1, &wc) == 0);
-        if (wc.status != IBV_WC_SUCCESS) {
-            fprintf(stderr, "CQ error: %d\n", wc.status);
+        if (poll_cq_verify(cq, &wc, IBV_WC_RECV_RDMA_WITH_IMM) != 0)
             break;
-        }
 
         uint32_t seq = ntohl(wc.imm_data);
         if (rdma_write(qp, mr, buf, remote.addr, remote.rkey, seq)) {
@@ -159,7 +156,8 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        while (ibv_poll_cq(cq, 1, &wc) == 0);
+        if (poll_cq_verify(cq, &wc, IBV_WC_RDMA_WRITE) != 0)
+            break;
     }
 
     ibv_destroy_qp(qp);
