@@ -12,6 +12,22 @@
 #define TCP_PORT 18515
 #define CQ_SIZE  16
 
+static inline struct ibv_context *open_device_by_name(const char *name) {
+    struct ibv_device **dev_list = ibv_get_device_list(NULL);
+    if (!dev_list) {
+        return NULL;
+    }
+    struct ibv_context *ctx = NULL;
+    for (int i = 0; dev_list[i]; i++) {
+        if (strcmp(ibv_get_device_name(dev_list[i]), name) == 0) {
+            ctx = ibv_open_device(dev_list[i]);
+            break;
+        }
+    }
+    ibv_free_device_list(dev_list);
+    return ctx;
+}
+
 struct conn_data {
     uint64_t addr;
     uint32_t rkey;
@@ -31,8 +47,9 @@ static inline int modify_qp_to_init(struct ibv_qp *qp, int port) {
         IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS);
 }
 
-static inline int modify_qp_to_rtr(struct ibv_qp *qp, int port, uint32_t remote_qpn,
-                                   uint16_t dlid, uint8_t *dgid, int use_gid) {
+static inline int modify_qp_to_rtr(struct ibv_qp *qp, int port, int gid_index,
+                                   uint32_t remote_qpn, uint16_t dlid,
+                                   uint8_t *dgid, int use_gid) {
     struct ibv_qp_attr attr = {
         .qp_state              = IBV_QPS_RTR,
         .path_mtu              = IBV_MTU_1024,
@@ -51,7 +68,7 @@ static inline int modify_qp_to_rtr(struct ibv_qp *qp, int port, uint32_t remote_
         attr.ah_attr.is_global = 1;
         attr.ah_attr.grh.dgid.global.subnet_prefix = ((uint64_t*)dgid)[0];
         attr.ah_attr.grh.dgid.global.interface_id  = ((uint64_t*)dgid)[1];
-        attr.ah_attr.grh.sgid_index = 0;
+        attr.ah_attr.grh.sgid_index = gid_index;
         attr.ah_attr.grh.hop_limit  = 1;
     }
     return ibv_modify_qp(qp, &attr,
@@ -73,13 +90,13 @@ static inline int modify_qp_to_rts(struct ibv_qp *qp) {
         IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC);
 }
 
-static inline void post_recv(struct ibv_qp *qp) {
+static inline int post_recv(struct ibv_qp *qp) {
     struct ibv_recv_wr wr = {0}, *bad;
-    ibv_post_recv(qp, &wr, &bad);
+    return ibv_post_recv(qp, &wr, &bad);
 }
 
-static inline void rdma_write(struct ibv_qp *qp, struct ibv_mr *mr, void *buf,
-                              uint64_t remote_addr, uint32_t rkey, uint32_t imm) {
+static inline int rdma_write(struct ibv_qp *qp, struct ibv_mr *mr, void *buf,
+                             uint64_t remote_addr, uint32_t rkey, uint32_t imm) {
     struct ibv_sge sge = {
         .addr   = (uintptr_t)buf,
         .length = BUF_SIZE,
@@ -93,7 +110,7 @@ static inline void rdma_write(struct ibv_qp *qp, struct ibv_mr *mr, void *buf,
         .imm_data   = htonl(imm),
         .wr.rdma = { .remote_addr = remote_addr, .rkey = rkey }
     }, *bad;
-    ibv_post_send(qp, &wr, &bad);
+    return ibv_post_send(qp, &wr, &bad);
 }
 
 #endif /* RDMA_COMMON_H */
